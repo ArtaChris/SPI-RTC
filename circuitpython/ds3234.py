@@ -49,6 +49,23 @@ _DS3234_SRAM_DATA = const(0x19)
 
 _DS3234_MAX_SCLK = const(4000000)
 
+
+def _bcd2bin(value):
+    """Convert binary coded decimal to Binary
+
+    :param value: the BCD value to convert to binary (required, no default)
+    """
+    return value - 6 * (value >> 4)
+
+
+def _bin2bcd(value):
+    """Convert a binary value to binary coded decimal.
+
+    :param value: the binary value to convert to BCD. (required, no default)
+    """
+    return value + 6 * (value // 10)
+
+
 class DS3234:
     time_buf = bytearray(8)
 
@@ -57,18 +74,17 @@ class DS3234:
 
     @property
     def datetime(self):
-        buf = bytearray(8)
-        buf[0] = _DS3234_SECONDS & _DS3234_READ_MASK
+        self.time_buf[0] = _DS3234_SECONDS & _DS3234_READ_MASK
         with self.spi_device as spi:
-            spi.write_readinto(buf, self.time_buf)
+            spi.write_readinto(self.time_buf, self.time_buf)
         return time.struct_time(
             (
-                (self.time_buf[7] & 0x0F) + (self.time_buf[7] >> 4) * 10 + 2000,
-                (self.time_buf[6] & 0x0F) + ((self.time_buf[6] & 0x10) >> 4) * 10,
-                (self.time_buf[5] & 0x0F) + ((self.time_buf[5] & 0x30) >> 4) * 10,
-                (self.time_buf[3] & 0x0F) + ((self.time_buf[3] & 0x30) >> 4) * 10,
-                (self.time_buf[2] & 0x0F) + ((self.time_buf[2] & 0x70) >> 4) * 10,
-                (self.time_buf[1] & 0x0F) + ((self.time_buf[1] & 0x70) >> 4) * 10,
+                _bcd2bin(self.time_buf[7]) + 2000,
+                _bcd2bin(self.time_buf[6]),
+                _bcd2bin(self.time_buf[5]),
+                _bcd2bin(self.time_buf[3]),
+                _bcd2bin(self.time_buf[2]),
+                _bcd2bin(self.time_buf[1]),
                 (self.time_buf[4] & 0x07),
                 -1,
                 -1,
@@ -77,15 +93,14 @@ class DS3234:
 
     @datetime.setter
     def datetime(self, time):
-        buf = bytearray(8)
-        buf[0] = _DS3234_SECONDS | _DS3234_WRITE_MASK
-        buf[1] = (time[5] % 0x0A) | ((time[5] // 0x0A) << 4)
-        buf[2] = (time[4] % 0x0A) | ((time[4] // 0x0A) << 4)
-        buf[3] = (time[3] % 0x0A) | (((time[3] // 0x0A) << 4) & 0x30)
-        buf[4] = (time[6] & 0x07)
-        buf[5] = (time[2] % 0x0A) | (((time[2] // 0x0A) << 4) & 0x30)
-        buf[6] = (time[1] % 0x0A) | (((time[1] // 0x0A) << 4) & 0x10)
-        buf[7] = (time[0] % 0x0A) | ((((time[0] % 0x64) // 0x0A) << 4) & 0xF0)
+        self.time_buf[0] = _DS3234_SECONDS | _DS3234_WRITE_MASK
+        self.time_buf[1] = _bin2bcd(time[5]) & 0x7F
+        self.time_buf[2] = _bin2bcd(time[4])
+        self.time_buf[3] = _bin2bcd(time[3])
+        self.time_buf[4] = (time[6] & 0x07)
+        self.time_buf[5] = _bin2bcd(time[2])
+        self.time_buf[6] = _bin2bcd(time[1])
+        self.time_buf[7] = _bin2bcd(time[0] - 2000)
         with self.spi_device as spi:
-            spi.write(buf)
+            spi.write(self.time_buf)
 
