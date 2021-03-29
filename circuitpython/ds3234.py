@@ -51,10 +51,6 @@ _DS3234_MAX_SCLK = const(4000000)
 
 class DS3234:
     time_buf = bytearray(8)
-    alarm1_buf = bytearray(4)
-    alarm2_buf = bytearray(3)
-
-    address_buf = bytearray(1)
 
     def __init__(self, spi, cs):
         self.spi_device = SPIDevice(spi, cs, baudrate=_DS3234_MAX_SCLK, polarity=0, phase=1)
